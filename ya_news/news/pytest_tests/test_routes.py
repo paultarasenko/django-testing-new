@@ -1,53 +1,37 @@
 from http import HTTPStatus
 
 import pytest
-from django.urls import reverse
-
-
-def test_signup_page_is_available(client):
-    url = reverse('users:signup')
-
-    response = client.get(url)
-
-    assert response.status_code == HTTPStatus.OK
+from pytest_django.asserts import assertRedirects
 
 
 @pytest.mark.parametrize(
-    'url_fixture',
-    ('edit_url', 'delete_url'),
+    'url_fixture, client_fixture, expected_status',
+    (
+        ('home_url', 'client', HTTPStatus.OK),
+        ('detail_url', 'client', HTTPStatus.OK),
+        ('login_url', 'client', HTTPStatus.OK),
+        ('signup_url', 'client', HTTPStatus.OK),
+        ('edit_url', 'author_client', HTTPStatus.OK),
+        ('delete_url', 'author_client', HTTPStatus.OK),
+        ('edit_url', 'not_author_client', HTTPStatus.NOT_FOUND),
+        ('delete_url', 'not_author_client', HTTPStatus.NOT_FOUND),
+    ),
 )
-def test_comment_pages_are_available_to_author(
-    author_client,
+def test_pages_status_codes(
     request,
     url_fixture,
+    client_fixture,
+    expected_status,
 ):
     url = request.getfixturevalue(url_fixture)
+    current_client = request.getfixturevalue(client_fixture)
 
-    response = author_client.get(url)
+    response = current_client.get(url)
 
-    assert response.status_code == HTTPStatus.OK
-
-
-@pytest.mark.parametrize(
-    'url_fixture',
-    ('edit_url', 'delete_url'),
-)
-def test_comment_pages_are_unavailable_to_not_author(
-    not_author_client,
-    request,
-    url_fixture,
-):
-    url = request.getfixturevalue(url_fixture)
-
-    response = not_author_client.get(url)
-
-    assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.status_code == expected_status
 
 
-@pytest.mark.parametrize(
-    'url_fixture',
-    ('edit_url', 'delete_url'),
-)
+@pytest.mark.parametrize('url_fixture', ('edit_url', 'delete_url'))
 def test_anonymous_user_is_redirected_to_login(
     client,
     login_url,
@@ -55,30 +39,17 @@ def test_anonymous_user_is_redirected_to_login(
     url_fixture,
 ):
     url = request.getfixturevalue(url_fixture)
-    expected_url = f'{login_url}?next={url}'
 
     response = client.get(url)
 
-    assert response.status_code == HTTPStatus.FOUND
-    assert response.url == expected_url
+    assertRedirects(response, f'{login_url}?next={url}')
 
 
-def test_authorized_user_logs_out_by_post_request(author_client):
-    url = reverse('users:logout')
-
-    response = author_client.post(url)
+def test_authorized_user_logs_out_by_post_request(
+    author_client,
+    logout_url,
+):
+    response = author_client.post(logout_url)
 
     assert response.status_code == HTTPStatus.OK
     assert '_auth_user_id' not in author_client.session
-
-
-@pytest.mark.parametrize(
-    'url_fixture',
-    ('home_url', 'detail_url', 'login_url'),
-)
-def test_public_pages_are_available(client, db, request, url_fixture):
-    url = request.getfixturevalue(url_fixture)
-
-    response = client.get(url)
-
-    assert response.status_code == HTTPStatus.OK

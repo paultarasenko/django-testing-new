@@ -1,21 +1,24 @@
 from http import HTTPStatus
 
+import pytest
+from pytest_django.asserts import assertFormError, assertRedirects
+
+from news.forms import BAD_WORDS, WARNING
 from news.models import Comment
 
 FORM_DATA = {'text': 'Новый текст комментария'}
-BAD_WORDS_DATA = {'text': 'Какой же ты редиска!'}
-WARNING = 'Не ругайтесь!'
 
 
 def test_anonymous_cannot_create_comment(
     client,
     detail_url,
+    login_url,
 ):
     comments_count = Comment.objects.count()
 
     response = client.post(detail_url, data=FORM_DATA)
 
-    assert response.status_code == HTTPStatus.FOUND
+    assertRedirects(response, f'{login_url}?next={detail_url}')
     assert Comment.objects.count() == comments_count
 
 
@@ -29,7 +32,7 @@ def test_author_can_create_comment(
 
     response = author_client.post(detail_url, data=FORM_DATA)
 
-    assert response.url == f'{detail_url}#comments'
+    assertRedirects(response, f'{detail_url}#comments')
     assert Comment.objects.count() == comments_count + 1
     new_comment = Comment.objects.get()
     assert new_comment.text == FORM_DATA['text']
@@ -37,16 +40,18 @@ def test_author_can_create_comment(
     assert new_comment.news == news
 
 
+@pytest.mark.parametrize('bad_word', BAD_WORDS)
 def test_comment_with_bad_words_is_not_created(
     author_client,
     detail_url,
+    bad_word,
 ):
     comments_count = Comment.objects.count()
+    bad_words_data = {'text': f'Какой же ты {bad_word}!'}
 
-    response = author_client.post(detail_url, data=BAD_WORDS_DATA)
+    response = author_client.post(detail_url, data=bad_words_data)
 
-    form = response.context['form']
-    assert form.errors['text'] == [WARNING]
+    assertFormError(response.context['form'], 'text', WARNING)
     assert Comment.objects.count() == comments_count
 
 
@@ -61,7 +66,7 @@ def test_author_can_edit_comment(
     response = author_client.post(edit_url, data=FORM_DATA)
 
     updated = Comment.objects.get(pk=comment.pk)
-    assert response.url == f'{detail_url}#comments'
+    assertRedirects(response, f'{detail_url}#comments')
     assert Comment.objects.count() == comments_count
     assert updated.text == FORM_DATA['text']
     assert updated.author == comment.author
@@ -90,7 +95,7 @@ def test_author_can_delete_comment(
 ):
     response = author_client.post(delete_url)
 
-    assert response.url == f'{detail_url}#comments'
+    assertRedirects(response, f'{detail_url}#comments')
     assert not Comment.objects.filter(pk=comment.pk).exists()
 
 

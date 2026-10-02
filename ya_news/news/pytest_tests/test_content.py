@@ -1,6 +1,6 @@
-from news.forms import CommentForm
+from django.conf import settings
 
-NEWS_ON_HOME_PAGE = 10
+from news.forms import CommentForm
 
 
 def test_home_page_news_count_is_limited(
@@ -12,7 +12,7 @@ def test_home_page_news_count_is_limited(
 
     object_list = response.context['object_list']
 
-    assert len(object_list) == NEWS_ON_HOME_PAGE
+    assert object_list.count() == settings.NEWS_COUNT_ON_HOME_PAGE
 
 
 def test_news_are_sorted_newest_first(
